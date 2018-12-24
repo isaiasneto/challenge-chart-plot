@@ -1,0 +1,534 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<!--
+			All the code was written using javascript because I have more experience and due the deadline of the challenge, I choosed JS.
+			I'm very enthusiastic to start developing with ReactJS. I believe that my skills with javascript, will help to develop with React more easly.
+			I tried hardly to follow the layout prototype provided.
+		-->
+
+		<title>Intelie Challenge FrontEnd</title>
+
+		<!-- Choosed the framework materialize because of the beauty, the similarity to Bootstrap and it's free! -->
+		<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/css/materialize.min.css">
+		<link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Source+Code+Pro|Source+Sans+Pro">
+		<!-- Choosed the codemirror to exibit the sequences of events, because is the best web code editor with embedded syntax hilight that I know. -->
+		<link rel="stylesheet" href="/public/codemirror.css">
+		<link rel="stylesheet" href="/public/codemirrortheme-darcula.css">
+
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
+
+		<!-- Choosed the chartjs because of the beauty, similarity to C3 charts and it's free! -->
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.7.3/Chart.min.js"></script>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.42.2/codemirror.min.js"></script>
+
+		<!-- Custom CSS modifications -->
+		<style type="text/css">
+			.ssanspro {
+				font-family: 'Source Sans Pro', sans-serif;
+			}
+
+			.scodepro {
+				font-family: 'Source Code Pro', monospace;
+			}
+
+			#divtitle {
+				background-color: #dddee1;
+				margin-bottom: 0px;
+			}
+
+			#divcode {
+				padding: 0px !important;
+			}
+
+			#resize {
+				background: #f7f7f7;
+				height: 1px;
+				user-select: none;
+				cursor: row-resize;
+				border-top: 1px solid #000;
+				border-bottom: 1px solid #000;
+			}
+
+			#resize:before {
+				content: '\003D';
+				color: #999;
+				background-color: #000;
+				position: absolute;
+				width: 36px;
+				height: 22px;
+				padding: 0px 14px 0px 14px;
+				margin: -11px 0px 0px -28px;
+				left: 50%;
+				border-radius: 20px;
+				z-index: 999;
+			}
+
+			#resize:hover {
+				background: #E5E5E5;
+				color: #999;
+			}
+
+			#resize:hover:before {
+				color: #E5E5E5;
+			}
+
+			#chartcontainer {
+				position: absolute;
+				height: 200px;
+				width: 95%;
+			}
+
+			#bottominput {
+				position:fixed;
+				left: 0px;
+				bottom: 0px;
+				margin-bottom: auto;
+				width: 100%;
+				background-color: #dddee1;
+			}
+		</style>
+	</head>
+	<body>
+		<div class="container-fluid">
+			<div id="divtitle" class="row">
+				<div class="col s12">
+					<h4>Isaias Neto's Challenge</h4>
+				</div>
+			</div>
+
+			<div class="row">
+				<div id="divcode" class="col s12">
+					<div id="dbgout"></div>
+					<div id="resize"></div>
+				</div>
+			</div>
+
+			<div class="row">
+				<div class="col s12">
+					<div id="chartcontainer">
+						<canvas id="clinechart"></canvas>
+					</div>
+				</div>
+			</div>
+
+			<!--
+				I think that is important to add the input options to choose the quantity of sequences,
+				the time interval of the events, the operating systems and the browsers.
+			-->
+			<div id="bottominput" class="row">
+				<div class="input-field col s2">
+					<input id="cinputseqn" type="text" class="validate">
+					<label for="cinputseqn">Total Sequences</label>
+				</div>
+
+				<div class="input-field col s2">
+					<select id="cseqint">
+						<option value="" disabled>Select one</option>
+						<option value="hour">Hour</option>
+						<option value="minute">Minute</option>
+						<option value="second" selected>Second</option>
+					</select>
+					<label>Time Interval</label>
+				</div>
+
+				<div class="input-field col s3">
+					<select id="cselos" multiple>
+						<option value="" disabled>Select one or more</option>
+						<option value="Linux" selected>Linux</option>
+						<option value="Mac" selected>Mac</option>
+					</select>
+					<label>Choose O.S.</label>
+				</div>
+
+				<div class="input-field col s3">
+					<select id="cselbrowser" multiple>
+						<option value="select" disabled>Select one or more</option>
+						<option value="Chrome" selected>Chrome</option>
+						<option value="Firefox" selected>Firefox</option>
+					</select>
+					<label>Choose Browser</label>
+				</div>
+
+				<div class="input-field col s2 center-align">
+					<a id="cbtnstart" class="waves-effect waves-light btn">Start</a>
+				</div>
+			</div>
+		</div>
+
+		<script type="text/javascript">
+			//global vars
+			var chartlabels = [], chartdatasets = [], selos = [], selbrowser = [], mincdata = [],
+			maxcdata = [], updatedatasetarr = [];
+			var umindataset = {}, umaxdataset = {};
+			var dbgout = document.getElementById('dbgout');
+			var ccanvas = document.getElementById('clinechart').getContext('2d');
+			var chartcont = document.getElementById('chartcontainer');
+			var linechart, sinterval, stx, sty, sth, stch;
+
+			//codemirror init
+			var cmirror = CodeMirror(
+				dbgout,
+				{
+					lineNumbers: true,
+					mode: {name: 'javascript', json: true},
+					theme: 'darcula'
+				}
+			);
+
+			//init chart
+			initchart();
+
+			var windowheight = window.innerHeight;
+			var bottomheight = document.getElementById('bottominput').clientHeight;
+			var halfsize = (windowheight - bottomheight) / 2;
+			var chartcontmaxheight = windowheight - bottomheight - halfsize;
+			var cmirrorminheight = halfsize - 100;
+			var chartcontminheight = halfsize;
+			cmirror.setSize(null, cmirrorminheight+'px');
+			chartcont.style.height = chartcontminheight+'px';
+
+			//functions
+			function initchart() {
+				linechart = new Chart(ccanvas, {
+					type: 'line',
+					data: {
+						'labels': chartlabels,
+						'datasets': chartdatasets
+					},
+					options: {
+						responsive: true,
+						maintainAspectRatio: false,
+						legend: {
+							display: true,
+							position: 'right',
+							fullWidth: false,
+							labels: {
+								boxWidth: 10,
+								padding: 15,
+								fontFamily: 'Source Sans Pro, sans-serif'
+							}
+						},
+						scales: {
+							xAxes: [
+								{
+									display: true,
+									gridLines : {
+										display : false
+									}
+								}
+							],
+							yAxes: [
+								{
+									display: false,
+									gridLines : {
+										display : false
+									},
+									ticks: {
+										beginAtZero: true
+									}
+								}
+							]
+						}
+					}
+				});
+			};
+
+			function updatechart(label, interval, minval, maxval, sequence) {
+				var cmirrorstr = '';
+
+				var ssdate = todaystring();
+				var csequence = 1;
+
+				var updatestart = {
+					type: 'start',
+					timestamp: stringtots(ssdate),
+					select: [
+						'min_response_time',
+						'max_response_time'
+					],
+					group: [
+						'os',
+						'browser'
+					]
+				};
+				cmirrorstr += JSON.stringify(updatestart)+'\n';
+				cmirror.setValue(cmirrorstr);
+				chartlabels.push(tstostring(ssdate));
+
+				var update_span = {
+					type: 'span',
+					timestamp: stringtots(nowdatetime()),
+					begin: stringtots(ssdate),
+					end: stringtots(sdateplus(ssdate, interval, sequence))
+				};
+				cmirrorstr += JSON.stringify(update_span)+'\n';
+				cmirror.setValue(cmirrorstr);
+
+				umindataset = {};
+				umaxdataset = {};
+				var updatedatasetarr = [];
+				var updatedataset = setInterval(function() {
+					var osmap = selos.map(oss => {
+						var browsermap = selbrowser.map(brws => {
+							minrest = randomcmin();
+							maxrest = randomcmax();
+							mincdata.push(minrest);
+							maxcdata.push(maxrest);
+
+							var update_data = {
+								type: 'data',
+								timestamp: stringtots(ssdate),
+								os: oss,
+								browser: brws,
+								min_response_time: minrest,
+								max_response_time: maxrest
+							};
+							cmirrorstr += JSON.stringify(update_data)+'\n';
+							cmirror.setValue(cmirrorstr);
+
+							labelmin = oss+' '+brws+' Min Response Time';
+							labelmax = oss+' '+brws+' Max Response Time';
+
+							if (csequence == 1) {
+								switch (labelmin) {
+									case 'Linux Chrome Min Response Time':
+										colormin = '#72be4e';
+										colormax = '#2e725d';
+										break;
+									case 'Linux Firefox Min Response Time':
+										colormin = '#88c1e0';
+										colormax = '#3e61b2';
+										break;
+									case 'Mac Chrome Min Response Time':
+										colormin = '#8664a4';
+										colormax = '#54446a';
+										break;
+									case 'Mac Firefox Min Response Time':
+										colormin = '#f5d023';
+										colormax = '#e6aa52';
+										break;
+								}
+
+								umindataset = {
+									'label': labelmin,
+									'data': [minrest],
+									'fill': false,
+									'borderColor': colormin,
+									'backgroundColor': colormin,
+									'lineTension': 0
+								};
+								chartdatasets.push(umindataset);
+
+								umaxdataset = {
+									'label': labelmax,
+									'data': [maxrest],
+									'fill': false,
+									'borderColor': colormax,
+									'backgroundColor': colormax,
+									'lineTension': 0
+								};
+								chartdatasets.push(umaxdataset);
+							} else {
+								chartdatasets.filter(function(current, index) {
+									if (current.label == labelmin) {
+										chartdatasets[index].data.push(minrest);
+									};
+
+									if (current.label == labelmax) {
+										chartdatasets[index].data.push(maxrest);
+									};
+								});
+							}
+						});
+					});
+
+					if (csequence == sequence) {
+						var update_stop = {
+							type: 'stop',
+							timestamp: stringtots(ssdate)
+						};
+						cmirrorstr += JSON.stringify(update_stop);
+						cmirror.setValue(cmirrorstr);
+
+						document.getElementById('cbtnstart').removeAttribute('disabled');
+
+						linechart.update();
+
+						clearInterval(updatedataset);
+						return;
+					} else {
+						ssdate = sdateplus(ssdate, interval);
+						chartlabels.push(tstostring(ssdate));
+						linechart.update();
+					}
+					csequence++;
+				}, 200);
+			};
+
+			function nowdatetime() {
+				now = new Date();
+				nday = now.getDate();
+				nday = ('0' + nday).slice(-2);
+				nmonth = (now.getMonth()+1);
+				nmonth = ('0'+nmonth).slice(-2);
+				nyear = now.getFullYear();
+				nhour = now.getHours();
+				nhour = ('0'+nhour).slice(-2);
+				nmin = now.getMinutes();
+				nmin = ('0'+nmin).slice(-2);
+				nsec = now.getSeconds();
+				nsec = ('0'+nsec).slice(-2);
+				return nyear+'-'+nmonth+'-'+nday+' '+nhour+':'+nmin+':'+nsec;
+			};
+
+			function todaystring() {
+				today = new Date();
+				tday = today.getDate();
+				tday = ('0' + tday).slice(-2);
+				tmonth = (today.getMonth()+1);
+				tmonth = ('0'+tmonth).slice(-2);
+				tyear = today.getFullYear();
+				return tyear+'-'+tmonth+'-'+tday+' 00:00:00';
+			};
+
+			function sdateplus(sdate, sint, stotal = null) {
+				d = new Date(sdate);
+
+				if (stotal != null) {
+					tnum = stotal - 1;
+				} else {
+					tnum = 1;
+				}
+
+				switch (sint) {
+					case 'hour':
+						d.setHours(d.getHours()+tnum);
+						break;
+					case 'minute':
+						d.setMinutes(d.getMinutes()+tnum);
+						break;
+					case 'second':
+						d.setSeconds(d.getSeconds()+tnum);
+						break;
+					default:
+						d.setSeconds(d.getSeconds()+tnum);
+				}
+
+				day = d.getDate();
+				day = ('0'+day).slice(-2);
+				month = (d.getMonth()+1);
+				month = ('0'+month).slice(-2);
+				year = d.getFullYear();
+				hour = d.getHours();
+				hour = ('0'+hour).slice(-2);
+				min = d.getMinutes();
+				min = ('0'+min).slice(-2);
+				sec = d.getSeconds();
+				sec = ('0'+sec).slice(-2);
+
+				return d.getTime();
+			};
+
+			function stringtots(string) {
+				d = new Date(string);
+				day = d.getDate();
+				day = ('0' + day).slice(-2);
+				month = (d.getMonth() + 1);
+				month = ('0' + month).slice(-2);
+				year = d.getFullYear();
+				hour = d.getHours();
+				hour = ('0'+hour).slice(-2);
+				min = d.getMinutes();
+				min = ('0'+min).slice(-2);
+				sec = d.getSeconds();
+				sec = ('0'+sec).slice(-2);
+
+				return d.getTime();
+			};
+
+			function tstostring(ts) {
+				d = new Date(ts);
+				day = d.getDate();
+				day = ('0' + day).slice(-2);
+				month = (d.getMonth() + 1);
+				month = ('0' + month).slice(-2);
+				year = d.getFullYear();
+				hour = d.getHours();
+				hour = ('0'+hour).slice(-2);
+				min = d.getMinutes();
+				min = ('0'+min).slice(-2);
+				sec = d.getSeconds();
+				sec = ('0'+sec).slice(-2);
+
+				return year+'-'+month+'-'+day+' '+hour+':'+min+':'+sec;
+			};
+
+			function randomcmin(min = 0, max = 0.5) {
+				return (Math.random() * (max - min) + min).toFixed(1);
+			};
+
+			function randomcmax(min = 1, max = 1.9) {
+				return (Math.random() * (max - min) + min).toFixed(1);
+			};
+
+			function ondrag(e) {
+				codeheight = Math.max(200, (sth + e.y - sty))+'px';
+				chartheight = Math.max(200, (stch - e.y + sty))+'px';
+
+				if (e.y >= 300) {
+					chartcont.style.height = chartheight;
+				}
+
+				if (e.y <= 600) {
+					cmirror.setSize(null, codeheight);
+				}
+			};
+
+			function onrelease(e) {
+				document.body.removeEventListener('mousemove', ondrag);
+				window.removeEventListener('mouseup', onrelease);
+			};
+
+			//listeners
+			document.addEventListener('DOMContentLoaded', function() {
+				var elems = document.querySelectorAll('select');
+				var instances = M.FormSelect.init(elems);
+			});
+
+			document.getElementById('cseqint').addEventListener('change', function() {
+				sinterval = this.value;
+			});
+
+			document.getElementById('cbtnstart').addEventListener('click', function() {
+				seqnum = parseInt(document.getElementById('cinputseqn').value);
+				instcseq = M.FormSelect.getInstance(document.getElementById('cseqint'));
+				instselos = M.FormSelect.getInstance(document.getElementById('cselos'));
+				selos = instselos.getSelectedValues();
+				instselbr = M.FormSelect.getInstance(document.getElementById('cselbrowser'));
+				selbrowser = instselbr.getSelectedValues();
+
+				document.getElementById('cbtnstart').setAttribute('disabled', true);
+
+				if (chartdatasets.length > 0 && chartlabels.length > 0) {
+					chartlabels = [];
+					chartdatasets = [];
+					linechart.destroy();
+					initchart();
+				}
+
+				updatechart('teste', sinterval, randomcmin(), randomcmax(), seqnum);
+			});
+
+			document.getElementById('resize').addEventListener('mousedown', function (e) {
+				stx = e.x;
+				sty = e.y;
+				sth = parseInt(window.getComputedStyle(dbgout).height.replace(/px$/, ''));
+				stch = parseInt(window.getComputedStyle(chartcont).height.replace(/px$/, ''));
+
+				document.body.addEventListener('mousemove', ondrag);
+				window.addEventListener('mouseup', onrelease);
+			});
+		</script>
+	</body>
+</html>
